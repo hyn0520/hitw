@@ -351,6 +351,18 @@ class SceneCfg(InteractiveSceneCfg):
         ),
         debug_vis=False,
     )
+    height_scanner = RayCasterCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/pelvis",
+        update_period=1 / 50,
+        offset=RayCasterCfg.OffsetCfg(pos=(0, 0, 0.6)),
+        mesh_prim_paths=["/World/ground"],
+        attach_yaw_only=True,
+        pattern_cfg=patterns.GridPatternCfg(
+            resolution=0.1, size=[1.1, 0.7]
+        ),  # data = ((1.1/0.1)+1)*((0.7/0.1)+1) = 96
+        debug_vis=True,
+    )
+
     camera = NoisyGroupedRayCasterCameraCfg(
         prim_path="{ENV_REGEX_NS}/Robot/torso_link",
         mesh_prim_paths=["/World/ground/", "/World/envs/env_.*/Robot/(?!.*torso_link).*"],
@@ -593,7 +605,13 @@ class ObservationsCfg:
             },
             noise=None,
         )
-
+        height_scan = ObsTerm(
+            func=mdp.height_scan,
+            params={
+                "sensor_cfg": SceneEntityCfg("height_scanner"),
+            },
+            clip=(-1.0, 1.0),
+        )
         def __post_init__(self):
             self.enable_corruption = False
             self.concatenate_terms = False
