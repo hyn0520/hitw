@@ -320,7 +320,14 @@ class GroupedRayCasterCamera(GroupedRayCaster):
     def _debug_vis_callback(self, event):
         if not hasattr(self, "ray_hits_w"):
             return
-        viz_points = self.ray_hits_w.reshape(-1, 3)
+        #viz_points = self.ray_hits_w.reshape(-1, 3)
+        ray_hits = self.ray_hits_w
+        crop_region = getattr(self.cfg, "debug_vis_crop_region", None)
+        if crop_region is not None:
+            start_up, end_down, start_left, end_right = crop_region
+            h, w = self.image_shape
+            ray_hits = ray_hits.view(-1, h, w, 3)[:, start_up : h - end_down, start_left : w - end_right, :]
+        viz_points = ray_hits.reshape(-1, 3)
         viz_points = viz_points[~torch.any(torch.isinf(viz_points), dim=1)]
         translations = torch.cat([viz_points, self._data.pos_w], dim=0)
         orientations = torch.cat(

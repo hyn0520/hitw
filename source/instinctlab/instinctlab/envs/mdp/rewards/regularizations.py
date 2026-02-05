@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import torch
+import isaaclab.utils.math as math_utils
 from typing import TYPE_CHECKING, Sequence
 
 from isaaclab.managers import ManagerTermBase, SceneEntityCfg
@@ -131,6 +132,138 @@ def action_rate_order(
         action_diff_err = action_diff_err[:, action_ids]
 
     return torch.sum(action_diff_err, dim=-1)
+
+
+def action_term_l2(
+    env: ManagerBasedRLEnv, term_name: str, normalize_by_dim: bool = False, use_processed: bool = True
+) -> torch.Tensor:
+    """Penalize the L2 magnitude of a specific action term."""
+    term = env.action_manager.get_term(term_name)
+    actions = term.processed_actions if use_processed else term.raw_actions
+    err = torch.sum(actions * actions, dim=-1)
+    if normalize_by_dim:
+        err = err / actions.shape[-1]
+    return err
+
+
+def camera_pitch_in_range_penalty(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg = SceneEntityCfg("camera"),
+    min_pitch: float = 0.0,
+    max_pitch: float = 0.0,
+) -> torch.Tensor:
+    """Penalty when camera pitch is within [min_pitch, max_pitch] (radians)."""
+    sensor = env.scene.sensors[sensor_cfg.name]
+    _, pitch, _ = math_utils.euler_xyz_from_quat(sensor._offset_quat)
+    in_range = (pitch >= min_pitch) & (pitch <= max_pitch)
+    return in_range.to(dtype=torch.float32)
+
+
+def camera_cropped_depth_variation_reward(
+    env: ManagerBasedRLEnv,
+    sensor_cfg: SceneEntityCfg = SceneEntityCfg("camera"),
+    data_type: str = "distance_to_image_plane",
+    crop_region: tuple[int, int, int, int] = (0, 0, 0, 0),
+    min_variation: float = 0.0,
+    use_latest_history: bool = True,
+) -> torch.Tensor:
+    """Reward when the cropped depth region shows height variation.
+
+    Computes max-min depth variation in the cropped region and returns positive reward if above threshold.
+    """
+    sensor = env.scene.sensors[sensor_cfg.name]
+    data = sensor.data.output[data_type]
+    # Handle history data: (N, T, H, W, C) -> take latest frame
+    if data.ndim == 5 and use_latest_history:
+        data = data[:, -1, ...]
+    # data: (N, H, W, C)
+    depth = data[..., 0]
+    up, down, left, right = crop_region
+    h, w = depth.shape[1], depth.shape[2]
+    depth = depth[:, up : h - down, left : w - right]
+    # variation per env
+    variation = depth.amax(dim=(1, 2)) - depth.amin(dim=(1, 2))
+    return (variation > min_variation).to(dtype=torch.float32)
+
+
+class action_term_rate_l2(ManagerTermBase):
+    """Penalize the L2 rate (delta) of a specific action term."""
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self._term_name = cfg.params.get("term_name")
+        self._use_processed = cfg.params.get("use_processed", True)
+        self._normalize_by_dim = cfg.params.get("normalize_by_dim", False)
+        self._term = env.action_manager.get_term(self._term_name)
+        self._prev_actions = torch.zeros_like(self._get_actions())
+
+    def _get_actions(self) -> torch.Tensor:
+        return self._term.processed_actions if self._use_processed else self._term.raw_actions
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        curr = self._get_actions()
+        self._prev_actions[env_ids] = curr[env_ids]
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        term_name: str | None = None,
+        normalize_by_dim: bool | None = None,
+        use_processed: bool | None = None,
+    ) -> torch.Tensor:
+        curr = self._get_actions()
+        diff = curr - self._prev_actions
+        self._prev_actions[:] = curr
+        rate_l2 = torch.sum(diff * diff, dim=-1)
+        if normalize_by_dim is None:
+            normalize_by_dim = self._normalize_by_dim
+        if normalize_by_dim:
+            rate_l2 = rate_l2 / curr.shape[-1]
+        return rate_l2
+
+
+class action_term_acc_l2(ManagerTermBase):
+    """Penalize the L2 acceleration (second difference) of a specific action term."""
+
+    def __init__(self, cfg: RewardTermCfg, env: ManagerBasedRLEnv):
+        super().__init__(cfg, env)
+        self._term_name = cfg.params.get("term_name")
+        self._use_processed = cfg.params.get("use_processed", True)
+        self._normalize_by_dim = cfg.params.get("normalize_by_dim", False)
+        self._term = env.action_manager.get_term(self._term_name)
+        curr = self._get_actions()
+        self._prev_actions = torch.zeros_like(curr)
+        self._prev2_actions = torch.zeros_like(curr)
+
+    def _get_actions(self) -> torch.Tensor:
+        return self._term.processed_actions if self._use_processed else self._term.raw_actions
+
+    def reset(self, env_ids: Sequence[int] | None = None) -> None:
+        if env_ids is None:
+            env_ids = slice(None)
+        curr = self._get_actions()
+        self._prev_actions[env_ids] = curr[env_ids]
+        self._prev2_actions[env_ids] = curr[env_ids]
+
+    def __call__(
+        self,
+        env: ManagerBasedRLEnv,
+        term_name: str | None = None,
+        normalize_by_dim: bool | None = None,
+        use_processed: bool | None = None,
+    ) -> torch.Tensor:
+        curr = self._get_actions()
+        acc = curr + self._prev2_actions - 2.0 * self._prev_actions
+        self._prev2_actions[:] = self._prev_actions
+        self._prev_actions[:] = curr
+        acc_l2 = torch.sum(acc * acc, dim=-1)
+        if normalize_by_dim is None:
+            normalize_by_dim = self._normalize_by_dim
+        if normalize_by_dim:
+            acc_l2 = acc_l2 / curr.shape[-1]
+        return acc_l2
 
 
 class action_rate_direction_switch(ManagerTermBase):
@@ -786,9 +919,9 @@ def contact_slide(
 ) -> torch.Tensor:
     """Penalize body sliding.
 
-    This function penalizes the agent for sliding its body on the ground. The reward is computed as the
-    norm of the linear velocity of the body multiplied by a binary contact sensor. This ensures that the
-    agent is penalized only when the body are in contact with the ground.
+    This function penalizes the agent for sliding its body on the ground. 
+    The reward is computed as the norm of the linear velocity of the body multiplied by a binary contact sensor. 
+    This ensures that theagent is penalized only when the body are in contact with the ground.
     """
     # Penalize body sliding
     contact_sensor: ContactSensor = env.scene.sensors[sensor_cfg.name]

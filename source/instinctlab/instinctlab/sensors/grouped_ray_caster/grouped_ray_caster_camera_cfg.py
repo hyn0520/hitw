@@ -70,6 +70,8 @@ class GroupedRayCasterCameraCfg(GroupedRayCasterCfg):
             ),
         },
     )
+    debug_vis_crop_region: tuple[int, int, int, int] | None = None
+    """Optional crop region (up, down, left, right) for debug visualization only."""
 
     def __post_init__(self):
         # for cameras, this quantity should be False always.

@@ -25,6 +25,7 @@ import instinctlab.tasks.parkour.mdp as mdp
 import instinctlab.terrains as terrain_gen
 from instinctlab.assets.unitree_g1 import beyondmimic_action_scale
 from instinctlab.managers import MultiRewardCfg
+from instinctlab.monitors import MonitorTermCfg, RewardSumMonitorTerm
 from instinctlab.motion_reference import MotionReferenceManagerCfg
 from instinctlab.sensors.noisy_camera import NoisyGroupedRayCasterCameraCfg
 from instinctlab.sensors.volume_points import Grid3dPointsGeneratorCfg, VolumePointsCfg
@@ -110,7 +111,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         ),
         "pyramid_stairs": terrain_gen.PerlinPyramidStairsTerrainCfg(
             proportion=0.15,
-            step_height_range=(0.05, 0.23),
+            step_height_range=(0.1, 0.23),#0.05
             step_width=0.3,
             platform_width=2.5,
             border_width=1.0,
@@ -365,6 +366,85 @@ class SceneCfg(InteractiveSceneCfg):
         data_types=["distance_to_image_plane"],
         update_period=0.02,
         depth_clipping_behavior="max",
+        debug_vis_crop_region=(18, 0, 16, 16),
+        offset=NoisyGroupedRayCasterCameraCfg.OffsetCfg(  # G1 Robot head camera nominal pose
+            pos=(
+                0.0487988662332928,
+                0.01,
+                0.4378029937970051,
+            ),
+            rot=(
+                0.9135367613482678,
+                0.004363309284746571,
+                0.4067366430758002,
+                0.0,
+            ),
+            # rot=(
+            #     0.9659258262890683,
+            #     0.0,
+            #     0.25881904510252074,
+            #     0.0,
+            # ),  
+            # rot=(
+            #     0.958819734868193,
+            #     0.0,
+            #     0.28401534470392265,
+            #     0.0,
+            # ),  # 33 站不稳
+
+            #rot = (0.9304175680, 0.0000000000, 0.3665012267, 0.0000000000),#43 work
+            #rot = (0.9396926208, 0.0000000000, 0.3420201433, 0.0000000000),#40 work
+            #rot = (0.9455185756, 0.0000000000, 0.3255681545, 0.0000000000),#38 work 不稳，站着会走
+            # rot=(
+            #         0.9537169507482269,
+            #         0.0,
+            #         0.3007057995042731,
+            #         0.0,
+            #     ),#35 会倒
+
+            #rot = (0.8949343616, 0.0000000000, 0.4461978131, 0.0000000000), #53 work
+            #rot = (0.8746197071, 0.0000000000, 0.4848096202, 0.0000000000), #58
+            
+            convention="world",
+        ),
+        aux_mesh_and_link_names={
+            "torso_link_rev_1_0": None,
+            "waist_yaw_link_rev_1_0": "waist_yaw_link",
+            "waist_roll_link_rev_1_0": "waist_roll_link",
+            "head_link": "head_link",
+            "left_rubber_hand": "left_rubber_hand",
+            "right_rubber_hand": "right_rubber_hand",
+        },
+        min_distance=0.1,
+        # noise
+        noise_pipeline={
+            "crop_and_resize": CropAndResizeCfg(crop_region=(18, 0, 16, 16)),
+            # "gaussian_blur": GaussianBlurNoiseCfg(kernel_size=3, sigma=1),
+            "depth_normalization": DepthNormalizationCfg(
+                depth_range=(0.0, 2.5),
+                normalize=True ,
+                output_range=(0.0, 1.0),
+            ),
+        },
+        data_histories={"distance_to_image_plane_noised": 37},
+    )
+    # terrain-only camera for reward (exclude robot body)
+    camera_terrain = NoisyGroupedRayCasterCameraCfg(
+        prim_path="{ENV_REGEX_NS}/Robot/torso_link",
+        mesh_prim_paths=["/World/ground/"],
+        attach_yaw_only=False,
+        pattern_cfg=PinholeCameraPatternCfg(
+            focal_length=1.0,
+            horizontal_aperture=2 * math.tan(math.radians(89.51) / 2),  # fovx
+            vertical_aperture=2 * math.tan(math.radians(58.29) / 2),  # fovy
+            width=64,
+            height=36,
+        ),
+        debug_vis=True,
+        data_types=["distance_to_image_plane"],
+        update_period=0.02,
+        depth_clipping_behavior="max",
+        debug_vis_crop_region=(18, 0, 16, 16),
         offset=NoisyGroupedRayCasterCameraCfg.OffsetCfg(  # G1 Robot head camera nominal pose
             pos=(
                 0.0487988662332928,
@@ -388,17 +468,15 @@ class SceneCfg(InteractiveSceneCfg):
             "right_rubber_hand": "right_rubber_hand",
         },
         min_distance=0.1,
-        # noise
         noise_pipeline={
             "crop_and_resize": CropAndResizeCfg(crop_region=(18, 0, 16, 16)),
-            "gaussian_blur": GaussianBlurNoiseCfg(kernel_size=3, sigma=1),
+            # "gaussian_blur": GaussianBlurNoiseCfg(kernel_size=3, sigma=1),
             "depth_normalization": DepthNormalizationCfg(
                 depth_range=(0.0, 2.5),
-                normalize=True,
+                normalize=True ,
                 output_range=(0.0, 1.0),
             ),
         },
-        data_histories={"distance_to_image_plane_noised": 37},
     )
     # lights
     sky_light = AssetBaseCfg(
@@ -451,6 +529,12 @@ class ObservationsCfg:
             flatten_history_dim=True,
         )
         actions = ObsTerm(func=mdp.last_action, history_length=8, flatten_history_dim=True)
+        camera_pitch = ObsTerm(
+            func=mdp.camera_pitch_angle,
+            history_length=1,
+            flatten_history_dim=True,
+            params={"sensor_cfg": SceneEntityCfg("camera")},
+        )
         depth_image = ObsTerm(
             func=mdp.delayed_visualizable_image,
             params={
@@ -491,6 +575,12 @@ class ObservationsCfg:
         joint_pos = ObsTerm(func=mdp.joint_pos_rel, history_length=8, flatten_history_dim=True)
         joint_vel = ObsTerm(func=mdp.joint_vel_rel, scale=0.05, history_length=8, flatten_history_dim=True)
         actions = ObsTerm(func=mdp.last_action, history_length=8, flatten_history_dim=True)
+        camera_pitch = ObsTerm(
+            func=mdp.camera_pitch_angle,
+            history_length=1,
+            flatten_history_dim=True,
+            params={"sensor_cfg": SceneEntityCfg("camera")},
+        )
         depth_image = ObsTerm(
             func=mdp.delayed_visualizable_image,
             params={
@@ -617,6 +707,15 @@ class ActionsCfg:
 
     joint_pos = mdp.JointPositionActionCfg(
         asset_name="robot", joint_names=[".*"], scale=beyondmimic_action_scale, use_default_offset=True
+    )
+    raycast_pitch = mdp.RaycastPitchOffsetActionCfg(
+        asset_name="robot",
+        sensor_name="camera",
+        extra_sensor_names=["camera_terrain"],
+        pitch_min=math.radians(38.0),
+        pitch_max=math.radians(58.0),
+        init_pitch=math.radians(48.0),
+
     )
 
 
@@ -791,6 +890,26 @@ class G1Rewards:
             "limit_ratio": 0.8,
         },
     )
+    camera_action_l2 = RewTerm(
+        func=mdp.action_term_l2,
+        weight=-0.001,
+        params={"term_name": "raycast_pitch"},
+    )
+    camera_pitch_in_range_penalty = RewTerm(
+        func=mdp.camera_pitch_in_range_penalty,
+        weight=-0.01,
+        params={"sensor_cfg": SceneEntityCfg("camera"), "min_pitch": math.radians(48.5), "max_pitch": math.radians(55.0)},
+    )
+    camera_depth_variation = RewTerm(
+        func=mdp.camera_cropped_depth_variation_reward,
+        weight=0.02,
+        params={
+            "sensor_cfg": SceneEntityCfg("camera_terrain"),
+            "data_type": "distance_to_image_plane",
+            "crop_region": (18, 0, 16, 16),
+            "min_variation": 0.1,
+        },
+    )
     undesired_contacts = RewTerm(
         func=mdp.undesired_contacts,
         weight=-1.0,
@@ -922,3 +1041,5 @@ class ParkourEnvCfg(ManagerBasedRLEnvCfg):
         # update sensor update periods
         if self.scene.contact_forces is not None:
             self.scene.contact_forces.update_period = self.sim.dt
+        # monitor reward terms (for tensorboard logging)
+        self.monitors.reward_sum = MonitorTermCfg(func=RewardSumMonitorTerm)

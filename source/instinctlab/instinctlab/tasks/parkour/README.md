@@ -24,6 +24,11 @@ python source/instinctlab/instinctlab/tasks/parkour/scripts/play.py --task=Insti
 ```bash
 python source/instinctlab/instinctlab/tasks/parkour/scripts/play.py --task=Instinct-Parkour-Target-Amp-G1-v0 --load_run=<run_name> --exportonnx --useonnx
 ```
+python source/instinctlab/instinctlab/tasks/parkour/scripts/play.py \
+  --task=Instinct-Parkour-Target-Amp-G1-Play-v0 \
+  --num_envs=1 \
+  --load_run=/home/user/hyn/instinctlab/logs/g1_parkour/20260123_204658 \
+  --checkpoint=model_20000.pt --keyboard_control
 
 ## Common Options
 
@@ -33,3 +38,17 @@ python source/instinctlab/instinctlab/tasks/parkour/scripts/play.py --task=Insti
 - `--video`: Record training/playback videos
 - `--exportonnx`: Export the trained model to ONNX format for onboard deployment during playing
 - `--useonnx`: Use the ONNX model for inference during playing (requires `--exportonnx`)
+
+
+python source/instinctlab/instinctlab/tasks/parkour/scripts/play.py \
+  --task=Instinct-Parkour-Target-Amp-G1-Play-v0 \
+  --num_envs=1 \
+  --load_run=/home/user/hyn/instinctlab/logs/instinct_rl/g1_parkour/20260204_235157_from20260204_150859 \
+  --checkpoint=model_15000.pt --keyboard_control --print_camera_pitch
+
+python scripts/instinct_rl/train.py \
+  --task=Instinct-Parkour-Target-Amp-G1-v0 \
+  --resume \
+  --load_run=/home/user/hyn/instinctlab/logs/instinct_rl/g1_parkour/20260204_150859 \
+  --checkpoint=model_5000.pt --headless
+

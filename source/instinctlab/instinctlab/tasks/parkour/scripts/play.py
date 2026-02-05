@@ -3,16 +3,46 @@
 """Launch Isaac Sim Simulator first."""
 
 import argparse
+import math
 import os
 import subprocess
 import sys
 
-sys.path.append(os.path.join(os.getcwd(), "scripts", "instinct_rl"))
+def _find_cli_args_dir(start_dir: str) -> str | None:
+    """Find a directory that contains `cli_args.py` for Instinct-RL scripts."""
+    cur_dir = os.path.abspath(start_dir)
+    for _ in range(12):
+        for candidate in (
+            os.path.join(cur_dir, "scripts", "instinct_rl"),
+            os.path.join(cur_dir, "instinctlab", "scripts", "instinct_rl"),
+        ):
+            if os.path.isfile(os.path.join(candidate, "cli_args.py")):
+                return candidate
+        parent = os.path.dirname(cur_dir)
+        if parent == cur_dir:
+            break
+        cur_dir = parent
+    return None
+
+
+_cli_args_dir = _find_cli_args_dir(os.getcwd()) or _find_cli_args_dir(os.path.dirname(__file__))
+if _cli_args_dir is None:
+    raise RuntimeError(
+        "Could not find Instinct-RL `cli_args.py`. Expected under `scripts/instinct_rl` or "
+        "`instinctlab/scripts/instinct_rl` (relative to the repo root)."
+    )
+
+# Ensure we import the correct `cli_args` module (avoid collisions with other projects).
+sys.path.insert(0, _cli_args_dir)
 
 from isaaclab.app import AppLauncher
 
 # local imports
-import cli_args  # isort: skip
+import importlib  # isort: skip
+
+if "cli_args" in sys.modules:
+    del sys.modules["cli_args"]
+cli_args = importlib.import_module("cli_args")  # isort: skip
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Play an RL agent with Instinct-RL.")
@@ -36,6 +66,18 @@ parser.add_argument("--zero_act_until", type=int, default=0, help="Zero actions 
 parser.add_argument("--keyboard_control", action="store_true", default=False, help="Enable keyboard control.")
 parser.add_argument("--keyboard_linvel_step", type=float, default=0.5, help="Linear velocity change per keyboard step.")
 parser.add_argument("--keyboard_angvel", type=float, default=1.0, help="Angular velocity set by keyboard.")
+parser.add_argument(
+    "--print_camera_pitch",
+    action="store_true",
+    default=False,
+    help="Print current camera pitch (degrees) each N steps.",
+)
+parser.add_argument(
+    "--print_camera_pitch_every",
+    type=int,
+    default=1,
+    help="Print camera pitch every N steps (used with --print_camera_pitch).",
+)
 
 # append Instinct-RL cli arguments
 cli_args.add_instinct_rl_args(parser)
@@ -250,6 +292,11 @@ def main():
             # env stepping
             obs, rewards, dones, infos = env.step(actions)
         timestep += 1
+        if args_cli.print_camera_pitch and (timestep % max(1, args_cli.print_camera_pitch_every) == 0):
+            term = getattr(env.unwrapped.action_manager, "_terms", {}).get("raycast_pitch", None)
+            if term is not None and hasattr(term, "processed_actions"):
+                pitch_rad = term.processed_actions[0].item()
+                print(f"[camera pitch] step={timestep} deg={math.degrees(pitch_rad):.2f}")
 
         # exit the loop if video_length is meet
         if args_cli.video:

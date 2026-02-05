@@ -108,6 +108,18 @@ def visualizable_image(
     return images
 
 
+def camera_pitch_angle(
+    env: ManagerBasedEnv,
+    sensor_cfg: SceneEntityCfg = SceneEntityCfg("camera"),
+) -> torch.Tensor:
+    """Return the camera pitch angle (radians) from the sensor offset quaternion."""
+    sensor: TiledCamera | Camera | RayCasterCamera | GroupedRayCasterCamera | NoisyGroupedRayCasterCamera = (
+        env.scene.sensors[sensor_cfg.name]
+    )
+    _, pitch, _ = math_utils.euler_xyz_from_quat(sensor._offset_quat)
+    return pitch.unsqueeze(-1)
+
+
 class delayed_visualizable_image(ManagerTermBase):
     """A callable class that could sample delayed images from camera sensor that has history data. This is initially
     designed to use NoisyGroupedRayCasterCamera. The output shape will always be (N, num_output_frames, H, W) for now.

@@ -29,9 +29,9 @@ G1_with_shoe_CFG.spawn.asset_path = os.path.abspath(
 
 @configclass
 class AmassMotionCfg(AmassMotionCfgBase):
-    path = os.path.expanduser("~/Datasets")
+    path = os.path.expanduser("/home/user/hyn/data_model/parkour_motion_reference")
     retargetting_func = None
-    filtered_motion_selection_filepath = os.path.expanduser("~/Datasets/parkour_motion_without_run.yaml")
+    filtered_motion_selection_filepath = os.path.expanduser("/home/user/hyn/data_model/parkour_motion_reference/parkour_motion_without_run.yaml")
     motion_start_from_middle_range = [0.0, 0.9]
     motion_start_height_offset = 0.0
     ensure_link_below_zero_ground = False
@@ -88,6 +88,14 @@ class G1ParkourRoughEnvCfg(ParkourEnvCfg):
         self.scene.robot = G1_CFG.replace(prim_path="{ENV_REGEX_NS}/Robot")
         self.scene.robot.actuators = beyondmimic_g1_29dof_delayed_actuators
         self.scene.motion_reference = motion_reference_cfg
+        #只加载台阶和mesh_boxes地形
+        for sub_terrain in self.scene.terrain.terrain_generator.sub_terrains.values():
+            sub_terrain.proportion = 0.0
+        if "pyramid_stairs" in self.scene.terrain.terrain_generator.sub_terrains and "mesh_boxes" in self.scene.terrain.terrain_generator.sub_terrains and "perlin_rough" in self.scene.terrain.terrain_generator.sub_terrains:
+            self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs"].proportion = 0.4
+            self.scene.terrain.terrain_generator.sub_terrains["mesh_boxes"].proportion = 0.4
+            self.scene.terrain.terrain_generator.sub_terrains["perlin_rough"].proportion = 0.2
+
 
 
 class ShoeConfigMixin:
@@ -121,7 +129,16 @@ class G1ParkourRoughEnvCfg_PLAY(G1ParkourRoughEnvCfg):
         if self.scene.terrain.terrain_generator is not None:
             self.scene.terrain.terrain_generator.num_rows = 4
             self.scene.terrain.terrain_generator.num_cols = 10
-
+        #     self.scene.terrain.terrain_generator.sub_terrains = {
+        #         "pyramid_stairs": self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs"].replace(proportion=1.0),
+        # }
+        #play时候只加载特定地形
+            for sub_terrain in self.scene.terrain.terrain_generator.sub_terrains.values():
+                sub_terrain.proportion = 0.0
+            if "pyramid_stairs" in self.scene.terrain.terrain_generator.sub_terrains:
+                self.scene.terrain.terrain_generator.sub_terrains["pyramid_stairs"].proportion = 1.0
+                #self.scene.terrain.terrain_generator.sub_terrains["mesh_boxes"].proportion = 1.0
+        
         self.scene.leg_volume_points.debug_vis = True
         self.commands.base_velocity.debug_vis = True
         self.events.physics_material = None
