@@ -354,7 +354,7 @@ class SceneCfg(InteractiveSceneCfg):
     height_scanner = RayCasterCfg(
         prim_path="{ENV_REGEX_NS}/Robot/pelvis",
         update_period=1 / 50,
-        offset=RayCasterCfg.OffsetCfg(pos=(0, 0, 0.6)),
+        offset=RayCasterCfg.OffsetCfg(pos=(0.1, 0, 0.6)),
         mesh_prim_paths=["/World/ground"],
         attach_yaw_only=True,
         pattern_cfg=patterns.GridPatternCfg(
@@ -936,6 +936,8 @@ class G1Rewards:
             "threshold": 1.0,
         },
     )
+    delta_yaw = RewTerm(func=mdp.delta_yaw_reward, weight=-0.5)
+    lin_vel_dir_reward = RewTerm(func=mdp.lin_vel_dir_reward, weight=-0.1)
 
 
 @configclass

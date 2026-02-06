@@ -185,6 +185,33 @@ def camera_cropped_depth_variation_reward(
     variation = depth.amax(dim=(1, 2)) - depth.amin(dim=(1, 2))
     return (variation > min_variation).to(dtype=torch.float32)
 
+def delta_yaw_reward(
+    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    asset: Articulation = env.scene[asset_cfg.name]
+    command = env.command_manager.get_command("base_velocity")
+    speed_yaw = asset.data.root_ang_vel_w[:, 2]
+    command_speed_yaw = command[:, 2]
+    delta_speed = torch.abs(speed_yaw - command_speed_yaw)
+    absolute_command = torch.abs(command_speed_yaw)
+    punish = delta_speed * (delta_speed > 0.1) * (delta_speed > 0.5 * absolute_command)
+    return punish
+
+
+def lin_vel_dir_reward(
+    env: ManagerBasedRLEnv, asset_cfg: SceneEntityCfg = SceneEntityCfg("robot")
+) -> torch.Tensor:
+    asset: Articulation = env.scene[asset_cfg.name]
+    command = env.command_manager.get_command("base_velocity")
+    vel_yaw = math_utils.quat_apply_inverse(
+        math_utils.yaw_quat(asset.data.root_quat_w), asset.data.root_lin_vel_w[:, :3]
+    )
+    command = env.command_manager.get_command("base_velocity")[:, :2]
+    lin_vel_dir = torch.nn.functional.normalize(vel_yaw[:, :2], dim=-1)
+    desired_lin_vel_dir = torch.nn.functional.normalize(command[:, :2], dim=-1)
+    punish = 1 - torch.sum(lin_vel_dir * desired_lin_vel_dir, dim=-1)
+    punish = punish * (torch.norm(command[:, :2], dim=-1) > 0.1)
+    return punish
 
 class action_term_rate_l2(ManagerTermBase):
     """Penalize the L2 rate (delta) of a specific action term."""

@@ -29,9 +29,9 @@ G1_with_shoe_CFG.spawn.asset_path = os.path.abspath(
 
 @configclass
 class AmassMotionCfg(AmassMotionCfgBase):
-    path = os.path.expanduser("/home/user/hyn/data_model/parkour_motion_reference")
+    path = os.path.expanduser("/mnt/data/hyn/data_model/parkour_motion_reference")
     retargetting_func = None
-    filtered_motion_selection_filepath = os.path.expanduser("/home/user/hyn/data_model/parkour_motion_reference/parkour_motion_without_run.yaml")
+    filtered_motion_selection_filepath = os.path.expanduser("/mnt/data/hyn/data_model/parkour_motion_reference/parkour_motion_without_run.yaml")
     motion_start_from_middle_range = [0.0, 0.9]
     motion_start_height_offset = 0.0
     ensure_link_below_zero_ground = False
@@ -69,9 +69,8 @@ motion_reference_cfg = MotionReferenceManagerCfg(
         "left_ankle_roll_link",
         "right_ankle_roll_link",
     ],
-    mp_split_method="Even",
+    mp_split_method="None",#Even
 )
-
 
 ROUGH_TERRAINS_CFG_PLAY = copy.deepcopy(ROUGH_TERRAINS_CFG)
 for sub_terrain_name, sub_terrain_cfg in ROUGH_TERRAINS_CFG_PLAY.sub_terrains.items():
