@@ -203,7 +203,7 @@ def lin_vel_dir_reward(
 ) -> torch.Tensor:
     asset: Articulation = env.scene[asset_cfg.name]
     command = env.command_manager.get_command("base_velocity")
-    vel_yaw = math_utils.quat_apply_inverse(
+    vel_yaw = math_utils.quat_rotate_inverse(
         math_utils.yaw_quat(asset.data.root_quat_w), asset.data.root_lin_vel_w[:, :3]
     )
     command = env.command_manager.get_command("base_velocity")[:, :2]

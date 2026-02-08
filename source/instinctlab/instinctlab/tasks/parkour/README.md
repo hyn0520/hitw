@@ -52,4 +52,4 @@ python scripts/instinct_rl/train.py \
   --load_run=/home/user/hyn/instinctlab/logs/instinct_rl/g1_parkour/20260204_150859 \
   --checkpoint=model_5000.pt --headless
 
-torchrun --nproc_per_node=8 scripts/instinct_rl/train.py --task=Instinct-Parkour-Target-Amp-G1-v0 --headless --num_envs=4096
+torchrun --nproc_per_node=8 scripts/instinct_rl/train.py --task=Instinct-Parkour-Target-Amp-G1-v0 --headless --num_envs=3072
