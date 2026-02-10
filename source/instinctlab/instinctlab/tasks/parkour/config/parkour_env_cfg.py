@@ -111,7 +111,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         ),
         "pyramid_stairs": terrain_gen.PerlinPyramidStairsTerrainCfg(
             proportion=0.15,
-            step_height_range=(0.05, 0.01),#（0.05， 0.23）
+            step_height_range=(0.05, 0.23),#（0.05， 0.23）
             step_width=0.3,
             platform_width=2.5,
             border_width=1.0,
@@ -244,7 +244,7 @@ ROUGH_TERRAINS_CFG = TerrainGeneratorCfg(
         ),
         "mesh_boxes": terrain_gen.PerlinMeshRandomMultiBoxTerrainCfg(
             proportion=0.10,
-            box_height_mean=[0.1, 0.15],#[0.1, 0.4]
+            box_height_mean=[0.1, 0.4],#[0.1, 0.4]
             box_height_range=0.05,
             box_length_mean=0.4,
             box_length_range=0.1,
@@ -794,7 +794,7 @@ class G1Rewards:
     # Regularization rewards
     volume_points_penetration = RewTerm(
         func=mdp.volume_points_penetration,
-        weight=-4.0,
+        weight=-6.0,
         params={
             "sensor_cfg": SceneEntityCfg("leg_volume_points"),
         },
@@ -910,7 +910,7 @@ class G1Rewards:
     )
     camera_action_l2 = RewTerm(
         func=mdp.action_term_l2,
-        weight=-0.001,
+        weight=-0.005,#0.001
         params={"term_name": "raycast_pitch"},
     )
     camera_pitch_in_range_penalty = RewTerm(
